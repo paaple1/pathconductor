@@ -6,7 +6,6 @@
     <title>Path Conductor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Make canvas follow parent element's size */
         html, body {
             height: 100%;
             margin: 0;
@@ -16,9 +15,12 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
+            /* Add padding to the bottom to prevent the fixed footer from overlapping the canvas content */
+            padding-bottom: 80px; 
+            box-sizing: border-box;
         }
         #canvas-container {
-            flex-grow: 1; /* Allow container to use all available space */
+            flex-grow: 1; 
             position: relative;
         }
         canvas {
@@ -42,17 +44,17 @@
         <div id="canvas-container">
             <canvas id="drawingCanvas"></canvas>
         </div>
-
-        <!-- Control buttons -->
-        <footer class="p-4 bg-gray-800 shadow-md z-10 flex justify-center items-center gap-4">
-            <button id="clear-button" class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                Clear All
-            </button>
-             <button id="undo-button" class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                Undo
-            </button>
-        </footer>
     </div>
+
+    <!-- Control buttons (Now fixed to the bottom) -->
+    <footer class="fixed bottom-0 w-full p-4 bg-gray-800 shadow-md z-20 flex justify-center items-center gap-4">
+        <button id="clear-button" class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+            Clear All
+        </button>
+         <button id="undo-button" class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+            Undo
+        </button>
+    </footer>
 
     <script>
         const canvas = document.getElementById('drawingCanvas');
@@ -61,44 +63,19 @@
         const clearButton = document.getElementById('clear-button');
         const undoButton = document.getElementById('undo-button');
         
-        const gridSize = 25;
-
         let points = []; 
         let curves = []; 
         let mousePos = { x: 0, y: 0 };
 
         function resizeCanvas() {
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width;
-            canvas.height = rect.height;
+            const container = document.getElementById('canvas-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
             draw(); 
         }
 
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
-
-        function drawGrid() {
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 0.5;
-            for (let x = 0; x <= canvas.width; x += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvas.height);
-                ctx.stroke();
-            }
-            for (let y = 0; y <= canvas.height; y += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvas.width, y);
-                ctx.stroke();
-            }
-        }
-        
-        function getSnappedCoords(x, y) {
-            const snappedX = Math.round(x / gridSize) * gridSize;
-            const snappedY = Math.round(y / gridSize) * gridSize;
-            return { x: snappedX, y: snappedY };
-        }
 
         function getProjectedPointOnLine(point, lineP1, lineP2) {
             const L2 = Math.pow(lineP2.x - lineP1.x, 2) + Math.pow(lineP2.y - lineP1.y, 2);
@@ -114,8 +91,6 @@
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            drawGrid(); 
             
             ctx.strokeStyle = '#f7fafc';
             ctx.lineWidth = 6;
@@ -194,6 +169,7 @@
             const rect = canvas.getBoundingClientRect();
             let pointToPush = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
+            // When placing the control point (p1) of a subsequent curve, project it onto the guideline.
             if (points.length === 1 && curves.length > 0) {
                 const lastCurve = curves[curves.length - 1];
                 const p1_prev = lastCurve.p1;
@@ -207,28 +183,23 @@
                 }
             }
             
-            const snappedPoint = getSnappedCoords(pointToPush.x, pointToPush.y);
-
             const lastPoint = points.length > 0 ? points[points.length - 1] : (curves.length > 0 ? curves[curves.length-1].p2 : null);
-             if (lastPoint && lastPoint.x === snappedPoint.x && lastPoint.y === snappedPoint.y) {
+            if (lastPoint && lastPoint.x === pointToPush.x && lastPoint.y === pointToPush.y) {
                 return; 
             }
 
-            points.push(snappedPoint);
+            points.push(pointToPush);
 
-            // --- 【MODIFIED】Connection integrity adjustment ---
             if (points.length === 3) {
                 const newCurve = { p0: points[0], p1: points[1], p2: points[2] };
 
-                // If there are existing curves, ensure the new curve's start point
-                // perfectly matches the last curve's end point.
                 if (curves.length > 0) {
                     const lastCurve = curves[curves.length - 1];
-                    newCurve.p0 = lastCurve.p2; // Explicitly enforce connection
+                    newCurve.p0 = lastCurve.p2; 
                 }
 
                 curves.push(newCurve);
-                points = [newCurve.p2]; // Start the next curve from the new end point
+                points = [newCurve.p2];
             }
             updateStatus();
             draw();
@@ -238,6 +209,7 @@
             const rect = canvas.getBoundingClientRect();
             let currentPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
+            // When previewing the control point, project the cursor onto the guideline.
             if (points.length === 1 && curves.length > 0) {
                 const lastCurve = curves[curves.length - 1];
                 const p1_prev = lastCurve.p1;
@@ -251,7 +223,7 @@
                 }
             }
             
-            mousePos = getSnappedCoords(currentPos.x, currentPos.y);
+            mousePos = currentPos;
             
             if (points.length > 0) {
                 requestAnimationFrame(draw);
@@ -278,7 +250,6 @@
             draw();
         });
 
-        // --- 【MODIFIED】Update status messages to English ---
         function updateStatus() {
             switch (points.length) {
                 case 0:
@@ -292,7 +263,7 @@
                     }
                     break;
                 case 2:
-                    statusMessage.textContent = "Click to place the curve's end point.";
+                    statusMessage.textContent = "Click anywhere to place the curve's end point.";
                     break;
             }
         }
